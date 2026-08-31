@@ -1,0 +1,6 @@
+@TrueLock.API_HostAddress = http://localhost:5218
+
+GET {{TrueLock.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
