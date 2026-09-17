@@ -1,14 +1,24 @@
+using Microsoft.EntityFrameworkCore;
+using TrueLock.API.Models;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
+// Controllers
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+
+// Conexión con la base de datos
+builder.Services.AddDbContext<TrueLockDbContext>(options =>
+    options.UseMySql(
+        builder.Configuration.GetConnectionString("TrueLockDatabase"),
+        ServerVersion.Parse("8.4.11-mysql")
+    ));
+
+// OpenAPI
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// OpenAPI solamente durante desarrollo
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
