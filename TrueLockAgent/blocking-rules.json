@@ -1,0 +1,12 @@
+﻿{
+  "Rules": [
+    {
+      "ApplicationId": "notepad",
+      "Enabled": true
+    },
+    {
+      "ApplicationId": "windows-calculator",
+      "Enabled": false
+    }
+  ]
+}

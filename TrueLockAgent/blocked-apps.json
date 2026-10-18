@@ -1,5 +1,18 @@
 ﻿{
-  "BlockedProcesses": [
-    "notepad.exe"
+  "Applications": [
+    {
+      "Id": "notepad",
+      "Name": "Bloc de notas",
+      "BlockedProcesses": [
+        "notepad.exe"
+      ]
+    },
+    {
+      "Id": "windows-calculator",
+      "Name": "Calculadora de Windows",
+      "BlockedProcesses": [
+        "CalculatorApp.exe"
+      ]
+    }
   ]
 }

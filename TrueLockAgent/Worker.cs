@@ -24,23 +24,44 @@ namespace TrueLockAgent
                 AppContext.BaseDirectory,
                 "blocked-apps.json");
 
+            logger.LogInformation(
+    "Carpeta de configuración vigilada: {Directory}",
+    AppContext.BaseDirectory);
+
             LoadBlockedProcesses(filePath);
 
-            using var fileWatcher = new FileSystemWatcher(
-                Path.GetDirectoryName(filePath)!,
-                Path.GetFileName(filePath))
+
+            string configDirectory = Path.GetDirectoryName(filePath)!;
+
+            using var fileWatcher = new FileSystemWatcher(configDirectory)
             {
+                Filter = "*.json",
                 NotifyFilter = NotifyFilters.LastWrite
                     | NotifyFilters.Size
                     | NotifyFilters.FileName
                     | NotifyFilters.CreationTime
             };
 
-            fileWatcher.Changed += (_, _) => ReloadBlockedProcesses(filePath);
-            fileWatcher.Created += (_, _) => ReloadBlockedProcesses(filePath);
-            fileWatcher.Renamed += (_, _) => ReloadBlockedProcesses(filePath);
+            fileWatcher.Changed += (_, args) =>
+            {
+                if (IsConfigFile(args.Name))
+                    ReloadBlockedProcesses(filePath);
+            };
+
+            fileWatcher.Created += (_, args) =>
+            {
+                if (IsConfigFile(args.Name))
+                    ReloadBlockedProcesses(filePath);
+            };
+
+            fileWatcher.Renamed += (_, args) =>
+            {
+                if (IsConfigFile(args.Name))
+                    ReloadBlockedProcesses(filePath);
+            };
 
             fileWatcher.EnableRaisingEvents = true;
+
 
             using var processWatcher = new ManagementEventWatcher(
                 new WqlEventQuery(
@@ -200,48 +221,123 @@ namespace TrueLockAgent
             }
         }
 
+        private static bool IsConfigFile(string? fileName)
+        {
+            return string.Equals(
+                    fileName,
+                    "blocked-apps.json",
+                    StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    fileName,
+                    "blocking-rules.json",
+                    StringComparison.OrdinalIgnoreCase);
+        }
+
+
+
+
+
         private void LoadBlockedProcesses(string filePath)
         {
-            if (!File.Exists(filePath))
+            try
             {
-                logger.LogWarning(
-                    "No se encontró blocked-apps.json en {Path}",
-                    filePath);
-                return;
-            }
-
-            string json = File.ReadAllText(filePath);
-
-            var config = JsonSerializer.Deserialize<BlockedAppsConfig>(
-                json,
-                new JsonSerializerOptions
+                if (!File.Exists(filePath))
                 {
-                    PropertyNameCaseInsensitive = true
-                });
+                    logger.LogWarning(
+                        "No se encontró blocked-apps.json en {Path}",
+                        filePath);
+                    return;
+                }
 
-            if (config?.BlockedProcesses is null)
+                string json = File.ReadAllText(filePath);
+
+                var catalog = JsonSerializer.Deserialize<BlockedAppsConfig>(
+                    json,
+                    new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                if (catalog?.Applications is null)
+                {
+                    logger.LogWarning(
+                        "El catálogo no contiene Applications.");
+                    return;
+                }
+
+                string rulesPath = Path.Combine(
+                    AppContext.BaseDirectory,
+                    "blocking-rules.json");
+
+                if (!File.Exists(rulesPath))
+                {
+                    logger.LogWarning(
+                        "No se encontró blocking-rules.json en {Path}",
+                        rulesPath);
+                    return;
+                }
+
+                string rulesJson = File.ReadAllText(rulesPath);
+
+                var rulesConfig =
+                    JsonSerializer.Deserialize<BlockingRulesConfig>(
+                        rulesJson,
+                        new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true
+                        });
+
+                if (rulesConfig?.Rules is null)
+                {
+                    logger.LogWarning(
+                        "El archivo de reglas no contiene Rules.");
+                    return;
+                }
+
+                var enabledIds = rulesConfig.Rules
+                    .Where(rule =>
+                        rule is not null &&
+                        rule.Enabled &&
+                        !string.IsNullOrWhiteSpace(rule.ApplicationId))
+                    .Select(rule => rule.ApplicationId!)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                string[] newRules = catalog.Applications
+                    .Where(app =>
+                        app is not null &&
+                        !string.IsNullOrWhiteSpace(app.Id) &&
+                        enabledIds.Contains(app.Id))
+                    .SelectMany(app =>
+                        app.BlockedProcesses ?? Array.Empty<string>())
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Select(name => Path.GetFileName(name.Trim()))
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+
+                lock (rulesLock)
+                {
+                    blockedProcesses = newRules;
+                }
+
+                logger.LogInformation(
+                    "Reglas activas cargadas: {Count}",
+                    newRules.Length);
+            }
+            catch (JsonException ex)
             {
                 logger.LogWarning(
-                    "El JSON no contiene BlockedProcesses. Se conservan las reglas anteriores.");
-                return;
+                    ex,
+                    "JSON inválido. Se conservan las reglas anteriores.");
             }
-
-            string[] newRules = config.BlockedProcesses
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Select(name => Path.GetFileName(name.Trim()))
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            lock (rulesLock)
+            catch (IOException ex)
             {
-                blockedProcesses = newRules;
+                logger.LogWarning(
+                    ex,
+                    "No se pudieron leer los archivos. Se conservan las reglas anteriores.");
             }
-
-            logger.LogInformation(
-                "Reglas actualizadas correctamente: {Count}",
-                newRules.Length);
         }
+
 
         private int GetRuleCount()
         {
@@ -253,6 +349,26 @@ namespace TrueLockAgent
 
         private sealed class BlockedAppsConfig
         {
+            public ApplicationConfig[]? Applications { get; set; }
+        }
+        private sealed class BlockingRulesConfig
+        {
+            public BlockingRule[]? Rules { get; set; }
+        }
+
+        private sealed class BlockingRule
+        {
+            public string? ApplicationId { get; set; }
+
+            public bool Enabled { get; set; }
+        }
+
+        private sealed class ApplicationConfig
+        {
+            public string? Id { get; set; }
+
+            public string? Name { get; set; }
+
             public string[]? BlockedProcesses { get; set; }
         }
     }
