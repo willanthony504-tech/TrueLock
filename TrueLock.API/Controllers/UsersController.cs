@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using TrueLock.API.Models;
+﻿
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using TrueLock.API.ModelsVerificados;
 
 namespace TrueLock.API.Controllers
 {
@@ -15,12 +17,25 @@ namespace TrueLock.API.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetUsers()
+        public async Task<IActionResult> GetUsers()
         {
-            var users = _context.Users.ToList();
+            var users = await _context.users.ToListAsync();
 
             return Ok(users);
         }
-    }
+        [HttpGet("roles")]
+        public async Task<IActionResult> GetRoles()
+        {
+            var roles = await _context.roles
+                .Select(r => new
+                {
+                    r.role_id,
+                    r.role_name,
+                    r.role_code
+                })
+                .ToListAsync();
 
+            return Ok(roles);
+        }
+    }
 }

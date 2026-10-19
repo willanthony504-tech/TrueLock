@@ -1,12 +1,12 @@
 using Microsoft.EntityFrameworkCore;
-using TrueLock.API.Models;
+using TrueLock.API.ModelsVerificados;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Controllers
 builder.Services.AddControllers();
 
-// Conexión con la base de datos
+// Conexión con la base de datos actualizada
 builder.Services.AddDbContext<TrueLockDbContext>(options =>
     options.UseMySql(
         builder.Configuration.GetConnectionString("TrueLockDatabase"),
