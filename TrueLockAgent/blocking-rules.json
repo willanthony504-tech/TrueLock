@@ -6,7 +6,7 @@
     },
     {
       "ApplicationId": "windows-calculator",
-      "Enabled": false
+      "Enabled": true
     }
   ]
 }

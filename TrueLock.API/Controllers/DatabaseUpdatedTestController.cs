@@ -1,7 +1,7 @@
 ﻿
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using TrueLock.API.ModelsVerificados;
+using TrueLock.API.ModelsActualizados;
 
 namespace TrueLock.API.Controllers;
 

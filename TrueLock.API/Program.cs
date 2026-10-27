@@ -1,33 +1,30 @@
 using Microsoft.EntityFrameworkCore;
-using TrueLock.API.ModelsVerificados;
+using TrueLock.API.ModelsActualizados;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Controllers
 builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
-// Conexión con la base de datos actualizada
+var connectionString =
+    builder.Configuration.GetConnectionString("TrueLockDatabase");
+
 builder.Services.AddDbContext<TrueLockDbContext>(options =>
     options.UseMySql(
-        builder.Configuration.GetConnectionString("TrueLockDatabase"),
-        ServerVersion.Parse("8.4.11-mysql")
-    ));
-
-// OpenAPI
-builder.Services.AddOpenApi();
+        connectionString,
+        ServerVersion.AutoDetect(connectionString)));
 
 var app = builder.Build();
 
-// OpenAPI solamente durante desarrollo
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();
